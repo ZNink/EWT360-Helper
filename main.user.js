@@ -19,17 +19,18 @@
     const ConfigManager = {
         // 默认配置
         defaultConfig: {
-            speed: 1,
-            autoCheckEnabled: true,
-            autoPlayEnabled: true,
-            autoSkipEnabled: true,
-            speedControlEnabled: true, // 倍速功能是否启用
-            mode: 'normal',
-            hangupModeEnabled: false, // 挂机模式状态
-            lastVolume: 1, // 保存最后一次音量设置
-            hangupSkipSubjects: [],
-            showSpeedWarning: true // 是否显示倍速提醒
-        },
+                speed: 1,
+                autoCheckEnabled: true,
+                autoPlayEnabled: true,
+                autoSkipEnabled: true,
+                speedControlEnabled: true, // 倍速功能是否启用
+                mode: 'normal',
+                hangupModeEnabled: false, // 挂机模式状态
+                lastVolume: 1, // 保存最后一次音量设置
+                hangupSkipSubjects: [],
+                showSpeedWarning: true, // 是否显示倍速提醒
+                soundEnabled: true // 是否播放提示音
+            },
 
         // 当前配置
         config: {},
@@ -834,7 +835,8 @@
                 autoCheckEnabled: ConfigManager.get('autoCheckEnabled'),
                 autoPlayEnabled: ConfigManager.get('autoPlayEnabled'),
                 autoSkipEnabled: ConfigManager.get('autoSkipEnabled'),
-                speedControlEnabled: ConfigManager.get('speedControlEnabled')
+                speedControlEnabled: ConfigManager.get('speedControlEnabled'),
+                soundEnabled: ConfigManager.get('soundEnabled')
             };
 
             // 保存当前音量
@@ -853,6 +855,7 @@
             ConfigManager.update('autoPlayEnabled', true);
             ConfigManager.update('autoSkipEnabled', true);
             ConfigManager.update('speedControlEnabled', false); // 倍速功能关闭
+            ConfigManager.update('soundEnabled', false); // 提示音关闭
 
             // 更新功能状态
             AutoCheck.start();
@@ -888,6 +891,7 @@
                     ConfigManager.update('autoPlayEnabled', preHangupSettings.autoPlayEnabled);
                     ConfigManager.update('autoSkipEnabled', preHangupSettings.autoSkipEnabled);
                     ConfigManager.update('speedControlEnabled', preHangupSettings.speedControlEnabled);
+                    ConfigManager.update('soundEnabled', preHangupSettings.soundEnabled);
 
                     // 更新功能状态
                     if (preHangupSettings.autoCheckEnabled) {
@@ -957,6 +961,7 @@
                 document.querySelector('[textContent="连播: 开"], [textContent="连播: 关"]'),
                 document.querySelector('[textContent="跳题: 开"], [textContent="跳题: 关"]'),
                 document.querySelector('[textContent="倍速: 开"], [textContent="倍速: 关"]'),
+                document.querySelector('[textContent="提示音: 开"], [textContent="提示音: 关"]'),
                 document.getElementById('speedUp'),
                 document.getElementById('speedDown'),
                 document.getElementById('subjectSettingsButton')
@@ -1129,6 +1134,18 @@
 
                     AutoSkip.toggle(isEnabled);
                     ConfigManager.update('autoSkipEnabled', isEnabled);
+                }
+            ));
+
+            // 提示音开关按钮
+            buttonsDiv.appendChild(this.createFunctionButton(
+                '提示音',
+                ConfigManager.get('soundEnabled'),
+                (isEnabled) => {
+                    // 如果在挂机模式下，不允许修改
+                    if (ConfigManager.get('hangupModeEnabled')) return;
+
+                    ConfigManager.update('soundEnabled', isEnabled);
                 }
             ));
 
@@ -1452,6 +1469,9 @@
      */
     const Utils = {
         playSound(type) {
+            // 检查是否启用提示音
+            if (!ConfigManager.get('soundEnabled')) return;
+            
             try {
                 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const oscillator = audioContext.createOscillator();
