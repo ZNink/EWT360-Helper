@@ -212,13 +212,6 @@ const AutoPlay = {
     }
 };
 
-    stop() {
-        if (this.intervalId) {
-            clearInterval(this.intervalId);
-            this.intervalId = null;
-            DebugLogger.log('AutoPlay', '自动连播已关闭');
-        }
-    },
 /**
  * 自动过检模块
  */
@@ -607,5 +600,6 @@ const GUI = {
         }
     });
 })();
+
 
 
