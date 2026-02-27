@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         升学E网通助手 v2 Lite
 // @namespace    https://github.com/ZNink/EWT360-Helper
-// @version      2.3.1
+// @version      2.4.1
 // @description  用于帮助学生通过升学E网通更好学习知识(雾)
 // @match        https://teacher.ewt360.com/ewtbend/bend/index/index.html*
 // @match        http://teacher.ewt360.com/ewtbend/bend/index/index.html*
 // @match        https://web.ewt360.com/site-study/*
 // @match        http://web.ewt360.com/site-study/*
-// @author       ZNink，Linrzh
+// @author       ZNink，Linrzh，L#peace
 // @icon         https://www.ewt360.com/favicon.ico
 // @grant        none
 // @updateURL    https://raw.githubusercontent.com/ZNink/EWT360-Helper/main/main.user.js
@@ -131,8 +131,8 @@ const AutoSkip = {
  */
 const AutoPlay = {
     intervalId: null,
-    // 新增：配置播放进度阈值（80%），方便后续调整
-    progressThreshold: 0.8,
+    // 新增：配置播放进度阈值（85%），方便后续调整
+    progressThreshold: 0.85,
 
     toggle(isEnabled) {
         isEnabled ? this.start() : this.stop();
@@ -159,7 +159,7 @@ const AutoPlay = {
         try {
             DebugLogger.debug('AutoPlay', '检查是否需要切换视频');
 
-            // 判断播放进度是否达到80%
+            // 判断播放进度是否达到85%
             //找到视频元素
             const videoElement = document.querySelector('video'); // 通用视频标签选择器
 
@@ -182,7 +182,7 @@ const AutoPlay = {
             // 计算播放进度=80%
             const progress = currentTime / duration;
             if (progress < this.progressThreshold) {
-                DebugLogger.debug('AutoPlay', `当前播放进度${(progress*100).toFixed(1)}%，未达到80%，不切换`);
+                DebugLogger.debug('AutoPlay', `当前播放进度${(progress*100).toFixed(1)}%，未达到85%，不切换`);
                 return;
             }
             //原逻辑保留
@@ -211,27 +211,6 @@ const AutoPlay = {
         }
     }
 };
-
-/**
- * 自动连播模块
- */
-const AutoPlay = {
-    intervalId: null,
-    // 新增：配置播放进度阈值（80%），方便后续调整
-    progressThreshold: 0.8,
-
-    toggle(isEnabled) {
-        isEnabled ? this.start() : this.stop();
-    },
-
-    start() {
-        if (this.intervalId) {
-            DebugLogger.debug('AutoPlay', '自动连播已运行');
-            return;
-        }
-        this.intervalId = setInterval(() => this.checkAndSwitch(), Config.rewatchInterval);
-        DebugLogger.log('AutoPlay', '自动连播已开启');
-    },
 
     stop() {
         if (this.intervalId) {
@@ -628,4 +607,5 @@ const GUI = {
         }
     });
 })();
+
 
