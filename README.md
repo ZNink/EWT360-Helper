@@ -24,9 +24,10 @@
 # 💖使用教程 - PC端(此处以Edge作为演示)
 1. 在Edge的插件商店在下载安装油猴(篡改猴)[Tampermonkey](https://microsoftedge.microsoft.com/addons/detail/%E7%AF%A1%E6%94%B9%E7%8C%B4/iikmkjmpaadaobahmlepeloendndfphd)
 2. 访问 [Script Installation | Tampermonkey](https://www.tampermonkey.net/script_installation.php#url=https://github.com/ZNink/EWT360-Helper/raw/refs/heads/main/main.user.js)
-3. 在Edge管理插件页面中打开开发人员模式
-4. 至此为止，PC端教程结束，你可以关闭没用的窗口，然后使用浏览器播放网课试试
-5. 课程播放后请**不要**调整进度条
+3. 在Edge[管理插件页面](edge://extensions/)中打开开发人员模式
+5. 在Edge的[油猴插件管理界面](edge://extensions/?id=iikmkjmpaadaobahmlepeloendndfphd)中打开**允许用户脚本**
+6. 至此为止，PC端教程结束，你可以关闭没用的窗口，然后使用浏览器播放网课试试
+**请注意：** 课程播放后请**不要**调整进度条
 
 # 💖使用教程 – 手机端(以Edge作为演示)
 1.	在你的浏览器或手机应用商店中搜索并下载Edge
