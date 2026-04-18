@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         升学E网通助手 v2 Lite
 // @namespace    https://github.com/ZNink/EWT360-Helper
-// @version      2.4.1
+// @version      2.4.2
 // @description  用于帮助学生通过升学E网通更好学习知识(雾)
 // @match        https://teacher.ewt360.com/ewtbend/bend/index/index.html*
 // @match        http://teacher.ewt360.com/ewtbend/bend/index/index.html*
@@ -58,7 +58,11 @@ const Config = {
     skipQuestionInterval: 1000,
     rewatchInterval: 2000,
     checkPassInterval: 1500,
-    speedCheckInterval: 3000
+    speedCheckInterval: 3000,
+    playMode: {
+        PROGRESS_85: 'progress85',
+        FULL_PLAY: 'fullPlay'
+    }
 };
 
 /**
@@ -90,17 +94,13 @@ const AutoSkip = {
         }
     },
 
-    // 简化后的 checkAndSkip 函数
     checkAndSkip() {
         try {
-            // 定义要查找的跳过文本
             const skipText = '跳过';
-            // 第一步：通过选择器查找包含跳过文本的按钮
             let targetButton = Array.from(document.querySelectorAll('button, a, span.btn, div.btn')).find(
                 btn => btn.textContent.trim() === skipText
             );
 
-            // 第二步：如果没找到，用XPath兜底查找
             if (!targetButton) {
                 const xpathResult = document.evaluate(
                     `//*[text()="${skipText}"]`, 
@@ -112,12 +112,10 @@ const AutoSkip = {
                 targetButton = xpathResult.singleNodeValue;
             }
 
-            // 第三步：找到按钮且未点击过，则执行点击
             if (targetButton && !targetButton.dataset.skipClicked) {
                 targetButton.dataset.skipClicked = 'true';
-                targetButton.click(); // 简化事件触发方式
+                targetButton.click();
                 DebugLogger.log('AutoSkip', '已自动跳过题目');
-                // 5秒后清除标记，允许再次点击
                 setTimeout(() => delete targetButton.dataset.skipClicked, 5000);
             }
         } catch (error) {
@@ -127,12 +125,12 @@ const AutoSkip = {
 };
 
 /**
- * 自动连播模块
+ * 自动连播模块（已修改：看完连播 = 检测进度图片）
  */
 const AutoPlay = {
     intervalId: null,
-    // 新增：配置播放进度阈值（85%），方便后续调整
     progressThreshold: 0.85,
+    currentMode: Config.playMode.PROGRESS_85,
 
     toggle(isEnabled) {
         isEnabled ? this.start() : this.stop();
@@ -155,56 +153,45 @@ const AutoPlay = {
         }
     },
 
+    updatePlayMode(mode) {
+        this.currentMode = mode;
+        if (mode === Config.playMode.PROGRESS_85) {
+            this.progressThreshold = 0.85;
+        }
+        DebugLogger.log('AutoPlay', `连播模式已切换：${mode === Config.playMode.PROGRESS_85 ? '85%进度' : '检测图片看完后'}`);
+    },
+
     checkAndSwitch() {
         try {
-            DebugLogger.debug('AutoPlay', '检查是否需要切换视频');
-
-            // 判断播放进度是否达到85%
-            //找到视频元素
-            const videoElement = document.querySelector('video'); // 通用视频标签选择器
-
-            // 无视频元素则直接返回
-            if (!videoElement) {
-                DebugLogger.debug('AutoPlay', '未找到视频播放元素');
-                return;
-            }
-
-            //获取视频当前播放时间和总时长
-            const currentTime = videoElement.currentTime; // 当前播放到的秒数
-            const duration = videoElement.duration; // 视频总时长
-
-            //过滤无效值
-            if (isNaN(duration) || duration === Infinity || duration === 0) {
-                DebugLogger.debug('AutoPlay', '视频时长未加载完成，暂不检查');
-                return;
-            }
-
-            // 计算播放进度=80%
-            const progress = currentTime / duration;
-            if (progress < this.progressThreshold) {
-                DebugLogger.debug('AutoPlay', `当前播放进度${(progress*100).toFixed(1)}%，未达到85%，不切换`);
-                return;
-            }
-            //原逻辑保留
             const videoListContainer = document.querySelector('.listCon-zrsBh');
             const activeVideo = videoListContainer?.querySelector('.item-blpma.active-EI2Hl');
-            if (!videoListContainer || !activeVideo) {
-                DebugLogger.debug('AutoPlay', '未找到视频列表或当前播放项');
-                return;
+            if (!videoListContainer || !activeVideo) return;
+
+            let canPlayNext = false;
+
+            if (this.currentMode === Config.playMode.PROGRESS_85) {
+                const video = document.querySelector('video');
+                if (!video) return;
+                const current = video.currentTime;
+                const total = video.duration;
+                if (isNaN(total) || total <= 0) return;
+                canPlayNext = current / total >= this.progressThreshold;
+            } else {
+                const img = document.querySelector('img.progress-img-vkUYM[src="//file.ewt360.com/file/1820894120067424424"]');
+                canPlayNext = !!img;
+                if (img) DebugLogger.log('AutoPlay', '检测到已看完图片，准备连播');
             }
+
+            if (!canPlayNext) return;
 
             let nextVideo = activeVideo.nextElementSibling;
             while (nextVideo) {
                 if (nextVideo.classList.contains('item-blpma') && !nextVideo.querySelector('.finished-PsNX9')) {
                     nextVideo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-                    DebugLogger.log('AutoPlay', `播放进度达到${(this.progressThreshold*100)}%，已切换下一个视频`);
+                    DebugLogger.log('AutoPlay', '已自动切换下一个视频');
                     break;
                 }
                 nextVideo = nextVideo.nextElementSibling;
-            }
-
-            if (!nextVideo) {
-                DebugLogger.debug('AutoPlay', '未找到下一个未完成的视频');
             }
         } catch (error) {
             DebugLogger.error('AutoPlay', '自动连播出错', error);
@@ -340,7 +327,7 @@ const CourseBrushMode = {
 };
 
 /**
- * GUI界面（精简冗余逻辑，保留全部功能）
+ * GUI界面
  */
 const GUI = {
     isMenuOpen: false,
@@ -350,7 +337,8 @@ const GUI = {
         autoCheckPass: false,
         speedControl: false,
         courseBrushMode: false,
-        hasShownGuide: false
+        hasShownGuide: false,
+        playMode: Config.playMode.PROGRESS_85
     },
 
     init() {
@@ -360,6 +348,7 @@ const GUI = {
         this.createMenuPanel();
         this.restoreModuleStates();
         this.createGuideOverlay();
+        AutoPlay.updatePlayMode(this.state.playMode);
         DebugLogger.log('GUI', '界面初始化完成');
     },
 
@@ -391,12 +380,19 @@ const GUI = {
             .ewt-helper-container{position:fixed;bottom:20px;right:20px;z-index:99999;font-family:Arial,sans-serif;}
             .ewt-menu-button{width:50px;height:50px;border-radius:50%;background:#4CAF50;color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 4px 8px rgba(0,0,0,0.2);transition:all .3s;}
             .ewt-menu-button:hover{background:#45a049;transform:scale(1.05);}
-            .ewt-menu-panel{position:absolute;bottom:60px;right:0;width:250px;background:white;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:15px;display:none;flex-direction:column;gap:10px;}
+            .ewt-menu-panel{position:absolute;bottom:60px;right:0;width:280px;background:white;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:15px;display:none;flex-direction:column;gap:10px;}
             .ewt-menu-panel.open{display:flex;}
             .ewt-menu-title{font-size:18px;font-weight:bold;color:#333;margin-bottom:10px;text-align:center;padding-bottom:5px;border-bottom:1px solid #eee;}
             .ewt-toggle-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f5f5f5;}
             .ewt-toggle-label{font-size:14px;color:#555;}
             .ewt-toggle-label.brush-mode{color:#2196F3;font-weight:bold;}
+            .ewt-playmode-group{padding:8px 0;border-bottom:1px solid #f5f5f5;}
+            .ewt-playmode-title{font-size:14px;color:#555;margin-bottom:8px;}
+            .ewt-playmode-buttons{display:flex;gap:8px;}
+            .ewt-playmode-btn{flex:1;padding:6px 0;border-radius:4px;border:1px solid #ddd;background:#fff;color:#555;cursor:pointer;text-align:center;font-size:13px;transition:all .2s;}
+            .ewt-playmode-btn.active{background:#4CAF50;color:white;border-color:#4CAF50;}
+            .ewt-playmode-btn:hover{background:#f5f5f5;}
+            .ewt-playmode-btn.active:hover{background:#45a049;}
             .ewt-switch{position:relative;display:inline-block;width:40px;height:24px;}
             .ewt-switch input{opacity:0;width:0;height:0;}
             .ewt-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;transition:.4s;border-radius:24px;}
@@ -412,20 +408,13 @@ const GUI = {
     },
 
     createMenuButton() {
-        // 先清除旧按钮，防止重复创建
         const oldContainer = document.querySelector('.ewt-helper-container');
-        if (oldContainer) {
-            oldContainer.remove();
-            DebugLogger.debug('GUI', '清除旧的GUI容器');
-        }
-
-        DebugLogger.debug('GUI', '创建菜单按钮');
+        if (oldContainer) oldContainer.remove();
         const container = document.createElement('div');
         container.className = 'ewt-helper-container';
         const btn = document.createElement('button');
         btn.className = 'ewt-menu-button';
         btn.innerHTML = '📚';
-        btn.title = '升学E网通助手';
         btn.onclick = () => this.toggleMenu();
         container.appendChild(btn);
         document.body.appendChild(container);
@@ -454,14 +443,56 @@ const GUI = {
         title.className = 'ewt-menu-title';
         title.textContent = '升学E网通助手';
         panel.appendChild(title);
-
+        panel.appendChild(this.createPlayModeGroup());
         panel.appendChild(this.createToggleItem('autoSkip', '自动跳题', v => AutoSkip.toggle(v)));
         panel.appendChild(this.createToggleItem('autoPlay', '自动连播', v => AutoPlay.toggle(v)));
         panel.appendChild(this.createToggleItem('autoCheckPass', '自动过检', v => AutoCheckPass.toggle(v)));
         panel.appendChild(this.createToggleItem('speedControl', '2倍速播放', v => SpeedControl.toggle(v)));
         panel.appendChild(this.createToggleItem('courseBrushMode', '刷课模式', v => CourseBrushMode.toggle(v), true));
-
         document.querySelector('.ewt-helper-container').appendChild(panel);
+    },
+
+    createPlayModeGroup() {
+        const group = document.createElement('div');
+        group.className = 'ewt-playmode-group';
+        const title = document.createElement('div');
+        title.className = 'ewt-playmode-title';
+        title.textContent = '连播模式选择';
+        group.appendChild(title);
+        const buttons = document.createElement('div');
+        buttons.className = 'ewt-playmode-buttons';
+
+        const btn85 = document.createElement('button');
+        btn85.className = `ewt-playmode-btn ${this.state.playMode === Config.playMode.PROGRESS_85 ? 'active' : ''}`;
+        btn85.textContent = '85%进度连播';
+        btn85.onclick = () => {
+            this.state.playMode = Config.playMode.PROGRESS_85;
+            AutoPlay.updatePlayMode(Config.playMode.PROGRESS_85);
+            this.updatePlayModeButtons();
+            this.saveConfig();
+        };
+
+        const btnFull = document.createElement('button');
+        btnFull.className = `ewt-playmode-btn ${this.state.playMode === Config.playMode.FULL_PLAY ? 'active' : ''}`;
+        btnFull.textContent = '看完后连播';
+        btnFull.onclick = () => {
+            this.state.playMode = Config.playMode.FULL_PLAY;
+            AutoPlay.updatePlayMode(Config.playMode.FULL_PLAY);
+            this.updatePlayModeButtons();
+            this.saveConfig();
+        };
+
+        buttons.appendChild(btn85);
+        buttons.appendChild(btnFull);
+        group.appendChild(buttons);
+        return group;
+    },
+
+    updatePlayModeButtons() {
+        const btns = document.querySelectorAll('.ewt-playmode-btn');
+        btns.forEach(b => b.classList.remove('active'));
+        if (this.state.playMode === Config.playMode.PROGRESS_85) btns[0].classList.add('active');
+        else btns[1].classList.add('active');
     },
 
     createToggleItem(id, label, onChange, isBrush = false) {
@@ -474,7 +505,7 @@ const GUI = {
         sw.className = 'ewt-switch';
         const input = document.createElement('input');
         input.type = 'checkbox';
-        input.id = `ewt-toggle-${id}`; // 补全id，确保setToggleState能找到
+        input.id = `ewt-toggle-${id}`;
         input.checked = this.state[id];
         const slider = document.createElement('span');
         slider.className = 'ewt-slider';
@@ -482,7 +513,6 @@ const GUI = {
         sw.appendChild(slider);
         item.appendChild(lab);
         item.appendChild(sw);
-
         input.onchange = e => {
             this.state[id] = e.target.checked;
             this.saveConfig();
@@ -507,99 +537,25 @@ const GUI = {
         this.state[id] = checked;
         this.saveConfig();
         const el = document.getElementById(`ewt-toggle-${id}`);
-        if (el) {
-            el.checked = checked;
-            DebugLogger.debug('GUI', `更新Toggle状态：${id}=${checked}`);
-        }
+        if (el) el.checked = checked;
     }
 };
 
-/**
- * 修复刷新后GUI消失的核心初始化逻辑
- */
 (function() {
     'use strict';
-    let staticRetryCount = 0; // 重试计数
-
-    /**
-     * 安全初始化GUI的核心函数
-     * 确保DOM就绪后再创建GUI，失败自动重试
-     */
-    function safeInitGUI() {
-        // 先检查DOM是否就绪（body存在）
-        if (!document.body) {
-            // DOM未就绪，500ms后重试
-            setTimeout(safeInitGUI, 500);
-            DebugLogger.debug('Main', 'DOM未就绪，延迟重试初始化');
-            return;
-        }
-
+    let retry = 0;
+    function init() {
+        if (!document.body) return setTimeout(init, 500);
         try {
-            // 执行GUI初始化
             GUI.init();
-            DebugLogger.log('Main', '升学E网通助手已加载 (v2.2.0)，GUI初始化成功');
-        } catch (error) {
-            // 初始化失败，1秒后重试（最多重试3次）
-            staticRetryCount++;
-            if (staticRetryCount < 3) {
-                setTimeout(safeInitGUI, 1000);
-                DebugLogger.error('Main', `GUI初始化失败，第${staticRetryCount}次重试`, error);
-            } else {
-                DebugLogger.error('Main', 'GUI初始化重试3次失败，请检查页面');
-                // 最后尝试直接创建核心按钮，保障基础功能
-                if (document.body && !document.querySelector('.ewt-helper-container')) {
-                    const container = document.createElement('div');
-                    container.className = 'ewt-helper-container';
-                    const btn = document.createElement('button');
-                    btn.className = 'ewt-menu-button';
-                    btn.innerHTML = '📚';
-                    btn.title = '升学E网通助手';
-                    container.appendChild(btn);
-                    document.body.appendChild(container);
-                }
-            }
+        } catch (e) {
+            if (retry++ < 3) setTimeout(init, 1000);
         }
     }
-
-    // 方案1：优先监听DOMContentLoaded（比load更早触发）
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        // DOM已就绪，立即初始化
-        safeInitGUI();
-    } else {
-        // DOM未就绪，监听就绪事件
-        document.addEventListener('DOMContentLoaded', safeInitGUI);
-    }
-
-    // 方案2：兜底监听load事件（防止DOMContentLoaded漏触发）
-    window.addEventListener('load', safeInitGUI);
-
-    // 方案3：监听页面DOM变化（针对SPA页面刷新/路由跳转）
-    const observer = new MutationObserver((mutations) => {
-        const hasBody = document.body;
-        const hasGUI = document.querySelector('.ewt-helper-container');
-        if (hasBody && !hasGUI) {
-            DebugLogger.debug('Main', '检测到DOM变化，重新初始化GUI');
-            safeInitGUI();
-            // 初始化成功后停止监听，避免重复触发
-            observer.disconnect();
-        }
-    });
-    // 监听根节点的子元素变化
-    observer.observe(document.documentElement, {
-        childList: true,
-        subtree: true,
-        attributes: false,
-        characterData: false
-    });
-
-    // 方案4：窗口焦点恢复时检查GUI（比如刷新后切回标签页）
-    window.addEventListener('focus', () => {
-        if (document.body && !document.querySelector('.ewt-helper-container')) {
-            DebugLogger.debug('Main', '窗口获得焦点，重新创建GUI');
-            safeInitGUI();
-        }
-    });
+    if (document.readyState === 'complete' || document.readyState === 'interactive') init();
+    else document.addEventListener('DOMContentLoaded', init);
+    window.addEventListener('load', init);
+    new MutationObserver((m, o) => {
+        if (document.body && !document.querySelector('.ewt-helper-container')) { init(); o.disconnect(); }
+    }).observe(document.documentElement, { childList: true, subtree: true });
 })();
-
-
-
